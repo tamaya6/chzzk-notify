@@ -11,12 +11,38 @@ let currentUserInfo = null;
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   await loadInitialData();
-  // Request fresh sync from background
   triggerSync();
 });
 
 function getLang() {
   return userSettings.language || 'auto';
+}
+
+/**
+ * Lightweight declarative DOM element builder
+ */
+function el(tag, props = {}, ...children) {
+  const elem = document.createElement(tag);
+  for (const [key, val] of Object.entries(props)) {
+    if (val === undefined || val === null) continue;
+    if (key === 'className') {
+      elem.className = val;
+    } else if (key === 'textContent') {
+      elem.textContent = val;
+    } else if (key.startsWith('on') && typeof val === 'function') {
+      elem.addEventListener(key.slice(2).toLowerCase(), val);
+    } else if (key === 'dataset' && typeof val === 'object') {
+      Object.assign(elem.dataset, val);
+    } else {
+      elem.setAttribute(key, val);
+    }
+  }
+  for (const child of children) {
+    if (child instanceof Node) {
+      elem.appendChild(child);
+    }
+  }
+  return elem;
 }
 
 /**
@@ -30,36 +56,96 @@ function safeUrl(url, fallback = '../icons/icon128.png') {
   return fallback;
 }
 
+/**
+ * Create safe image with fallback handling
+ */
+function createSafeImage(src, fallback, className = '') {
+  const img = el('img', {
+    className,
+    alt: '',
+    src: safeUrl(src, fallback)
+  });
+  img.addEventListener('error', () => {
+    if (img.src !== fallback) {
+      img.src = fallback;
+    }
+  });
+  return img;
+}
+
+/**
+ * Open stream in tab or PiP via background service worker
+ */
+function requestOpenStream(channelId, asPip = false) {
+  if (!channelId) return;
+  chrome.runtime.sendMessage({
+    type: 'OPEN_STREAM',
+    channelId,
+    asPip
+  });
+}
+
+/**
+ * Create notification toggle bell button component
+ */
+function createBellButton(ch, lang, size = 14) {
+  const notifyTitle = ch.notifyEnabled ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
+
+  const bellSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  bellSvg.setAttribute('viewBox', '0 0 24 24');
+  bellSvg.setAttribute('width', String(size));
+  bellSvg.setAttribute('height', String(size));
+  bellSvg.setAttribute('fill', ch.notifyEnabled ? 'currentColor' : 'none');
+  bellSvg.setAttribute('stroke', 'currentColor');
+  bellSvg.setAttribute('stroke-width', '2');
+
+  const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path1.setAttribute('d', 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9');
+  const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path2.setAttribute('d', 'M13.73 21a2 2 0 0 1-3.46 0');
+  bellSvg.appendChild(path1);
+  bellSvg.appendChild(path2);
+
+  const btn = el('button', {
+    className: `bell-btn ${ch.notifyEnabled ? 'active' : ''}`,
+    title: notifyTitle,
+    onclick: async (e) => {
+      e.stopPropagation();
+      const newState = !ch.notifyEnabled;
+      ch.notifyEnabled = newState;
+      await updateChannelNotifySetting(ch.channelId, newState);
+      btn.classList.toggle('active', newState);
+      bellSvg.setAttribute('fill', newState ? 'currentColor' : 'none');
+      btn.title = newState ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
+    }
+  }, bellSvg);
+
+  return btn;
+}
+
+/**
+ * Apply localized strings to static UI elements
+ */
 function applyI18n() {
   const lang = getLang();
 
-  // Translate text content
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n');
-    if (key) {
-      el.textContent = t(key, {}, lang);
-    }
+  document.querySelectorAll('[data-i18n]').forEach(elem => {
+    const key = elem.getAttribute('data-i18n');
+    if (key) elem.textContent = t(key, {}, lang);
   });
 
-  // Translate titles / tooltips
-  document.querySelectorAll('[data-i18n-title]').forEach(el => {
-    const key = el.getAttribute('data-i18n-title');
-    if (key) {
-      el.title = t(key, {}, lang);
-    }
+  document.querySelectorAll('[data-i18n-title]').forEach(elem => {
+    const key = elem.getAttribute('data-i18n-title');
+    if (key) elem.title = t(key, {}, lang);
   });
 
-  // Translate placeholders
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-    const key = el.getAttribute('data-i18n-placeholder');
-    if (key) {
-      el.placeholder = t(key, {}, lang);
-    }
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(elem => {
+    const key = elem.getAttribute('data-i18n-placeholder');
+    if (key) elem.placeholder = t(key, {}, lang);
   });
 }
 
 function setupEventListeners() {
-  // Refresh button
   const btnRefresh = document.getElementById('btnRefresh');
   btnRefresh.addEventListener('click', () => {
     btnRefresh.classList.add('rotating');
@@ -68,13 +154,11 @@ function setupEventListeners() {
     });
   });
 
-  // Search input
   const searchInput = document.getElementById('searchInput');
   const btnClearSearch = document.getElementById('btnClearSearch');
 
   searchInput.addEventListener('input', () => {
-    const query = searchInput.value.trim();
-    btnClearSearch.style.display = query ? 'block' : 'none';
+    btnClearSearch.style.display = searchInput.value.trim() ? 'block' : 'none';
     renderChannels();
   });
 
@@ -85,37 +169,25 @@ function setupEventListeners() {
     renderChannels();
   });
 
-  // Toggle offline section
   const toggleOffline = document.getElementById('toggleOfflineSection');
   toggleOffline.addEventListener('click', () => {
     isOfflineOpen = !isOfflineOpen;
-    const list = document.getElementById('offlineList');
-    const chevron = document.getElementById('offlineChevron');
-    list.style.display = isOfflineOpen ? 'flex' : 'none';
-    chevron.classList.toggle('rotated', isOfflineOpen);
+    document.getElementById('offlineList').style.display = isOfflineOpen ? 'flex' : 'none';
+    document.getElementById('offlineChevron').classList.toggle('rotated', isOfflineOpen);
   });
 
-  // Settings modal
-  const btnSettings = document.getElementById('btnSettings');
-  const btnCloseSettings = document.getElementById('btnCloseSettings');
   const settingsModal = document.getElementById('settingsModal');
-  const btnSaveSettings = document.getElementById('btnSaveSettings');
-  const btnTestSound = document.getElementById('btnTestSound');
-  const btnTestNotification = document.getElementById('btnTestNotification');
-
-  btnSettings.addEventListener('click', openSettingsModal);
-  btnCloseSettings.addEventListener('click', () => settingsModal.style.display = 'none');
+  document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
+  document.getElementById('btnCloseSettings').addEventListener('click', () => settingsModal.style.display = 'none');
   settingsModal.addEventListener('click', (e) => {
     if (e.target === settingsModal) settingsModal.style.display = 'none';
   });
 
-  btnSaveSettings.addEventListener('click', saveSettingsFromModal);
-  btnTestSound.addEventListener('click', testSound);
-  if (btnTestNotification) {
-    btnTestNotification.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'TEST_NOTIFICATION' });
-    });
-  }
+  document.getElementById('btnSaveSettings').addEventListener('click', saveSettingsFromModal);
+  document.getElementById('btnTestSound').addEventListener('click', testSound);
+  document.getElementById('btnTestNotification')?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'TEST_NOTIFICATION' });
+  });
 
   const volSlider = document.getElementById('settingSoundVolume');
   volSlider.addEventListener('input', () => {
@@ -182,302 +254,113 @@ function renderChannels() {
   const liveList = filtered.filter(ch => ch.isLive);
   const offlineList = filtered.filter(ch => !ch.isLive);
 
-  // Update counts
   document.getElementById('liveCountBadge').textContent = liveList.length;
   document.getElementById('offlineCountBadge').textContent = offlineList.length;
 
-  // Render Live Cards
   const liveContainer = document.getElementById('liveList');
   liveContainer.innerHTML = '';
   if (liveList.length === 0) {
-    const emptyDiv = document.createElement('div');
-    emptyDiv.className = 'empty-state';
-    emptyDiv.textContent = query ? t('noLiveMatching', {}, lang) : t('noLiveCurrent', {}, lang);
-    liveContainer.appendChild(emptyDiv);
+    liveContainer.appendChild(el('div', {
+      className: 'empty-state',
+      textContent: query ? t('noLiveMatching', {}, lang) : t('noLiveCurrent', {}, lang)
+    }));
   } else {
-    liveList.forEach(ch => {
-      liveContainer.appendChild(createLiveCard(ch, lang));
-    });
+    liveList.forEach(ch => liveContainer.appendChild(createLiveCard(ch, lang)));
   }
 
-  // Render Offline List
   const offlineContainer = document.getElementById('offlineList');
   offlineContainer.innerHTML = '';
   if (offlineList.length === 0) {
-    const emptyDiv = document.createElement('div');
-    emptyDiv.className = 'empty-state';
-    emptyDiv.textContent = query ? t('noOfflineMatching', {}, lang) : t('noOfflineCurrent', {}, lang);
-    offlineContainer.appendChild(emptyDiv);
+    offlineContainer.appendChild(el('div', {
+      className: 'empty-state',
+      textContent: query ? t('noOfflineMatching', {}, lang) : t('noOfflineCurrent', {}, lang)
+    }));
   } else {
-    offlineList.forEach(ch => {
-      offlineContainer.appendChild(createOfflineRow(ch, lang));
-    });
+    offlineList.forEach(ch => offlineContainer.appendChild(createOfflineRow(ch, lang)));
   }
 }
 
 function createLiveCard(ch, lang) {
-  const card = document.createElement('div');
-  card.className = 'live-card';
-
-  // Format viewer count & uptime
   const viewers = (ch.concurrentUserCount || 0).toLocaleString();
   const uptime = calcUptime(ch.openDate, lang);
+  const titleFallback = ch.liveTitle || t('noTitle', {}, lang);
 
   let thumbUrl = ch.liveImageUrl || '';
   if (thumbUrl && typeof thumbUrl === 'string') {
     thumbUrl = thumbUrl.replace(/\{type\}|%7Btype%7D/g, '720');
   }
-  const resolvedThumb = safeUrl(thumbUrl || ch.channelImageUrl, '../icons/icon128.png');
-  const resolvedAvatar = safeUrl(ch.channelImageUrl, '../icons/icon48.png');
 
-  const titleFallback = ch.liveTitle || t('noTitle', {}, lang);
-  const openStreamTitle = t('openStreamPage', {}, lang);
-  const pipBtnTitle = t('pipTitle', {}, lang);
-  const tabBtnTitle = t('tabTitle', {}, lang);
-  const notifyTitle = ch.notifyEnabled ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
-  const watchLabel = t('watch', {}, lang);
-  const pipLabel = t('pip', {}, lang);
+  const thumbImg = createSafeImage(thumbUrl || ch.channelImageUrl, '../icons/icon128.png', 'card-thumb-img');
+  const avatarImg = createSafeImage(ch.channelImageUrl, '../icons/icon48.png', 'streamer-avatar');
 
-  // 1. Thumbnail Container
-  const thumbContainer = document.createElement('div');
-  thumbContainer.className = 'card-thumb-container';
-  thumbContainer.dataset.action = 'open-tab';
-  thumbContainer.title = openStreamTitle;
-
-  const thumbImg = document.createElement('img');
-  thumbImg.className = 'card-thumb-img';
-  thumbImg.alt = '';
-  thumbImg.src = resolvedThumb;
-  thumbImg.addEventListener('error', () => {
-    if (ch.channelImageUrl && thumbImg.src !== ch.channelImageUrl) {
-      thumbImg.src = safeUrl(ch.channelImageUrl, '../icons/icon128.png');
-    } else {
-      thumbImg.src = '../icons/icon128.png';
-    }
-  });
-
-  const badgeLive = document.createElement('div');
-  badgeLive.className = 'badge-live-tag';
-  badgeLive.textContent = 'LIVE';
-
-  const badgeViewers = document.createElement('div');
-  badgeViewers.className = 'badge-viewers';
-  badgeViewers.textContent = `👥 ${viewers}`;
-
-  thumbContainer.appendChild(thumbImg);
-  thumbContainer.appendChild(badgeLive);
-  thumbContainer.appendChild(badgeViewers);
-
-  if (uptime) {
-    const badgeUptime = document.createElement('div');
-    badgeUptime.className = 'badge-uptime';
-    badgeUptime.textContent = `⏱️ ${uptime}`;
-    thumbContainer.appendChild(badgeUptime);
-  }
-
-  // 2. Card Content
-  const cardContent = document.createElement('div');
-  cardContent.className = 'card-content';
-
-  const avatarImg = document.createElement('img');
-  avatarImg.className = 'streamer-avatar';
-  avatarImg.alt = '';
-  avatarImg.src = resolvedAvatar;
-  avatarImg.addEventListener('error', () => {
-    avatarImg.src = '../icons/icon48.png';
-  });
-
-  const cardInfo = document.createElement('div');
-  cardInfo.className = 'card-info';
-
-  const streamTitle = document.createElement('div');
-  streamTitle.className = 'stream-title';
-  streamTitle.dataset.action = 'open-tab';
-  streamTitle.title = titleFallback;
-  streamTitle.textContent = titleFallback;
-
-  const streamSub = document.createElement('div');
-  streamSub.className = 'stream-sub';
-
-  const streamerName = document.createElement('span');
-  streamerName.className = 'streamer-name';
-  streamerName.textContent = ch.channelName || '';
-  streamSub.appendChild(streamerName);
-
-  if (ch.liveCategoryValue) {
-    const categoryTag = document.createElement('span');
-    categoryTag.className = 'category-tag';
-    categoryTag.textContent = ch.liveCategoryValue;
-    streamSub.appendChild(categoryTag);
-  }
-
-  // Action buttons
-  const cardActions = document.createElement('div');
-  cardActions.className = 'card-actions';
-
-  // Bell toggle button
-  const bellBtn = document.createElement('button');
-  bellBtn.className = `bell-btn ${ch.notifyEnabled ? 'active' : ''}`;
-  bellBtn.dataset.action = 'toggle-notify';
-  bellBtn.title = notifyTitle;
-
-  const bellSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  bellSvg.setAttribute('viewBox', '0 0 24 24');
-  bellSvg.setAttribute('width', '14');
-  bellSvg.setAttribute('height', '14');
-  bellSvg.setAttribute('fill', ch.notifyEnabled ? 'currentColor' : 'none');
-  bellSvg.setAttribute('stroke', 'currentColor');
-  bellSvg.setAttribute('stroke-width', '2');
-
-  const bellPath1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  bellPath1.setAttribute('d', 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9');
-  const bellPath2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  bellPath2.setAttribute('d', 'M13.73 21a2 2 0 0 1-3.46 0');
-  bellSvg.appendChild(bellPath1);
-  bellSvg.appendChild(bellPath2);
-  bellBtn.appendChild(bellSvg);
-
-  bellBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const newState = !ch.notifyEnabled;
-    ch.notifyEnabled = newState;
-    await updateChannelNotifySetting(ch.channelId, newState);
-    bellBtn.classList.toggle('active', newState);
-    bellSvg.setAttribute('fill', newState ? 'currentColor' : 'none');
-    bellBtn.title = newState ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
-  });
-
-  // PiP button
-  const pipBtn = document.createElement('button');
-  pipBtn.className = 'action-pill-btn pip-btn';
-  pipBtn.dataset.action = 'open-pip';
-  pipBtn.title = pipBtnTitle;
-  pipBtn.textContent = pipLabel;
-  pipBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    chrome.runtime.sendMessage({
-      type: 'OPEN_STREAM',
-      channelId: ch.channelId,
-      asPip: true
-    });
-  });
-
-  // Watch in tab button
-  const watchBtn = document.createElement('button');
-  watchBtn.className = 'action-pill-btn';
-  watchBtn.dataset.action = 'open-tab';
-  watchBtn.title = tabBtnTitle;
-  watchBtn.textContent = watchLabel;
-  watchBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    chrome.runtime.sendMessage({
-      type: 'OPEN_STREAM',
-      channelId: ch.channelId,
-      asPip: false
-    });
-  });
-
-  cardActions.appendChild(bellBtn);
-  cardActions.appendChild(pipBtn);
-  cardActions.appendChild(watchBtn);
-
-  cardInfo.appendChild(streamTitle);
-  cardInfo.appendChild(streamSub);
-  cardInfo.appendChild(cardActions);
-
-  cardContent.appendChild(avatarImg);
-  cardContent.appendChild(cardInfo);
-
-  card.appendChild(thumbContainer);
-  card.appendChild(cardContent);
-
-  // Card-level open tab clicks
-  thumbContainer.addEventListener('click', () => {
-    chrome.runtime.sendMessage({
-      type: 'OPEN_STREAM',
-      channelId: ch.channelId,
-      asPip: false
-    });
-  });
-
-  streamTitle.addEventListener('click', () => {
-    chrome.runtime.sendMessage({
-      type: 'OPEN_STREAM',
-      channelId: ch.channelId,
-      asPip: false
-    });
-  });
-
-  return card;
+  return el('div', { className: 'live-card' },
+    el('div', {
+      className: 'card-thumb-container',
+      title: t('openStreamPage', {}, lang),
+      onclick: () => requestOpenStream(ch.channelId, false)
+    },
+      thumbImg,
+      el('div', { className: 'badge-live-tag', textContent: 'LIVE' }),
+      el('div', { className: 'badge-viewers', textContent: `👥 ${viewers}` }),
+      uptime ? el('div', { className: 'badge-uptime', textContent: `⏱️ ${uptime}` }) : null
+    ),
+    el('div', { className: 'card-content' },
+      avatarImg,
+      el('div', { className: 'card-info' },
+        el('div', {
+          className: 'stream-title',
+          title: titleFallback,
+          textContent: titleFallback,
+          onclick: () => requestOpenStream(ch.channelId, false)
+        }),
+        el('div', { className: 'stream-sub' },
+          el('span', { className: 'streamer-name', textContent: ch.channelName || '' }),
+          ch.liveCategoryValue ? el('span', { className: 'category-tag', textContent: ch.liveCategoryValue }) : null
+        ),
+        el('div', { className: 'card-actions' },
+          createBellButton(ch, lang, 14),
+          el('button', {
+            className: 'action-pill-btn pip-btn',
+            title: t('pipTitle', {}, lang),
+            textContent: t('pip', {}, lang),
+            onclick: (e) => {
+              e.stopPropagation();
+              requestOpenStream(ch.channelId, true);
+            }
+          }),
+          el('button', {
+            className: 'action-pill-btn',
+            title: t('tabTitle', {}, lang),
+            textContent: t('watch', {}, lang),
+            onclick: (e) => {
+              e.stopPropagation();
+              requestOpenStream(ch.channelId, false);
+            }
+          })
+        )
+      )
+    )
+  );
 }
 
 function createOfflineRow(ch, lang) {
-  const row = document.createElement('div');
-  row.className = 'offline-row';
+  const avatarImg = createSafeImage(ch.channelImageUrl, '../icons/icon48.png', 'offline-avatar');
 
-  const resolvedAvatar = safeUrl(ch.channelImageUrl, '../icons/icon48.png');
-  const openChannelTitle = t('openChannelPage', {}, lang);
-  const notifyTitle = ch.notifyEnabled ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
-
-  const leftDiv = document.createElement('div');
-  leftDiv.className = 'offline-left';
-  leftDiv.title = openChannelTitle;
-
-  const avatarImg = document.createElement('img');
-  avatarImg.className = 'offline-avatar';
-  avatarImg.alt = '';
-  avatarImg.src = resolvedAvatar;
-  avatarImg.addEventListener('error', () => { avatarImg.src = '../icons/icon48.png'; });
-
-  const nameSpan = document.createElement('span');
-  nameSpan.className = 'offline-name';
-  nameSpan.textContent = ch.channelName || '';
-
-  leftDiv.appendChild(avatarImg);
-  leftDiv.appendChild(nameSpan);
-
-  leftDiv.addEventListener('click', () => {
-    if (ch.channelId) {
-      chrome.tabs.create({ url: `https://chzzk.naver.com/${encodeURIComponent(ch.channelId)}` });
-    }
-  });
-
-  // Bell toggle button
-  const bellBtn = document.createElement('button');
-  bellBtn.className = `bell-btn ${ch.notifyEnabled ? 'active' : ''}`;
-  bellBtn.dataset.action = 'toggle-notify';
-  bellBtn.title = notifyTitle;
-
-  const bellSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  bellSvg.setAttribute('viewBox', '0 0 24 24');
-  bellSvg.setAttribute('width', '13');
-  bellSvg.setAttribute('height', '13');
-  bellSvg.setAttribute('fill', ch.notifyEnabled ? 'currentColor' : 'none');
-  bellSvg.setAttribute('stroke', 'currentColor');
-  bellSvg.setAttribute('stroke-width', '2');
-
-  const bellPath1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  bellPath1.setAttribute('d', 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9');
-  const bellPath2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  bellPath2.setAttribute('d', 'M13.73 21a2 2 0 0 1-3.46 0');
-  bellSvg.appendChild(bellPath1);
-  bellSvg.appendChild(bellPath2);
-  bellBtn.appendChild(bellSvg);
-
-  bellBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    const newState = !ch.notifyEnabled;
-    ch.notifyEnabled = newState;
-    await updateChannelNotifySetting(ch.channelId, newState);
-    bellBtn.classList.toggle('active', newState);
-    bellSvg.setAttribute('fill', newState ? 'currentColor' : 'none');
-    bellBtn.title = newState ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
-  });
-
-  row.appendChild(leftDiv);
-  row.appendChild(bellBtn);
-
-  return row;
+  return el('div', { className: 'offline-row' },
+    el('div', {
+      className: 'offline-left',
+      title: t('openChannelPage', {}, lang),
+      onclick: () => {
+        if (ch.channelId) {
+          chrome.tabs.create({ url: `https://chzzk.naver.com/${encodeURIComponent(ch.channelId)}` });
+        }
+      }
+    },
+      avatarImg,
+      el('span', { className: 'offline-name', textContent: ch.channelName || '' })
+    ),
+    createBellButton(ch, lang, 13)
+  );
 }
 
 function calcUptime(openDateStr, lang) {
@@ -489,10 +372,9 @@ function calcUptime(openDateStr, lang) {
     const diffMins = Math.floor(diffMs / 60000);
     const hrs = Math.floor(diffMins / 60);
     const mins = diffMins % 60;
-    if (hrs > 0) {
-      return t('uptimeHoursMins', { hrs, mins }, lang);
-    }
-    return t('uptimeMins', { mins }, lang);
+    return hrs > 0
+      ? t('uptimeHoursMins', { hrs, mins }, lang)
+      : t('uptimeMins', { mins }, lang);
   } catch {
     return '';
   }
@@ -540,12 +422,10 @@ async function saveSettingsFromModal() {
 
   userSettings = await saveSettings(newSettings);
 
-  // Apply new language to popup UI immediately
   applyI18n();
   updateUserStatusUI(currentUserInfo);
   renderChannels();
 
-  // Notify background to update alarm interval
   chrome.runtime.sendMessage({
     type: 'UPDATE_ALARM',
     intervalMinutes: userSettings.pollingIntervalMinutes
