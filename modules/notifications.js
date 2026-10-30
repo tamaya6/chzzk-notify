@@ -60,6 +60,24 @@ export function updateActionBadge(liveCount) {
  * Track notification ID to channel mapping for click events
  */
 const notificationMap = new Map(); // notificationId -> { channelId, type }
+const DEFAULT_ICON = chrome.runtime.getURL('icons/icon128.png');
+
+/**
+ * Safely create a notification with fallback to default icon on failure
+ */
+async function safeCreateNotification(notifId, options) {
+  try {
+    await chrome.notifications.create(notifId, options);
+  } catch (err) {
+    console.warn(`[Chzzk Notify] Failed to create notification (${notifId}) with custom icon:`, err);
+    try {
+      options.iconUrl = DEFAULT_ICON;
+      await chrome.notifications.create(notifId, options);
+    } catch (fallbackErr) {
+      console.error('[Chzzk Notify] Failed to create fallback notification:', fallbackErr);
+    }
+  }
+}
 
 export function getNotificationTarget(notificationId) {
   return notificationMap.get(notificationId);
@@ -76,9 +94,9 @@ export async function notifyLiveStart(channel, settings) {
   notificationMap.set(notifId, { channelId: channel.channelId, type: 'live_start' });
 
   // Chrome notification
-  chrome.notifications.create(notifId, {
+  await safeCreateNotification(notifId, {
     type: 'basic',
-    iconUrl: channel.channelImageUrl || 'icons/icon128.png',
+    iconUrl: channel.channelImageUrl || DEFAULT_ICON,
     title: `🔴 ${channel.channelName} が配信を開始しました！`,
     message: `${channel.liveTitle}\n[${channel.liveCategoryValue || 'Just Chatting'}]`,
     contextMessage: 'Chzzk Live Notification',
@@ -101,9 +119,9 @@ export async function notifyLiveEnd(channel, settings) {
   const notifId = `live_end_${channel.channelId}_${Date.now()}`;
   notificationMap.set(notifId, { channelId: channel.channelId, type: 'live_end' });
 
-  chrome.notifications.create(notifId, {
+  await safeCreateNotification(notifId, {
     type: 'basic',
-    iconUrl: channel.channelImageUrl || 'icons/icon128.png',
+    iconUrl: channel.channelImageUrl || DEFAULT_ICON,
     title: `⏹️ ${channel.channelName} の配信が終了しました`,
     message: `直前のタイトル: ${channel.liveTitle || '(タイトルなし)'}`,
     contextMessage: 'Chzzk Live Notification',
@@ -121,9 +139,9 @@ export async function notifyCategoryChange(channel, oldCategory, newCategory, se
   const notifId = `category_${channel.channelId}_${Date.now()}`;
   notificationMap.set(notifId, { channelId: channel.channelId, type: 'category_change' });
 
-  chrome.notifications.create(notifId, {
+  await safeCreateNotification(notifId, {
     type: 'basic',
-    iconUrl: channel.channelImageUrl || 'icons/icon128.png',
+    iconUrl: channel.channelImageUrl || DEFAULT_ICON,
     title: `🎮 ${channel.channelName} がカテゴリを変更しました`,
     message: `${oldCategory || '未分類'} ➔ ${newCategory}\n${channel.liveTitle}`,
     contextMessage: 'Chzzk Live Notification',
@@ -142,9 +160,9 @@ export async function notifyTest(settings = {}) {
   const notifId = `test_notif_${Date.now()}`;
   notificationMap.set(notifId, { channelId: null, type: 'test' });
 
-  chrome.notifications.create(notifId, {
+  await safeCreateNotification(notifId, {
     type: 'basic',
-    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+    iconUrl: DEFAULT_ICON,
     title: '🔔 テスト通知: Chzzk Notify',
     message: '配信通知のテストです。トーストが正常に表示されています！',
     contextMessage: 'Chzzk Live Notification',

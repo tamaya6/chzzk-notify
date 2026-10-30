@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chzzk Notify",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Chzzkのフォロー中配信者のステータスを監視し、配信開始・終了・カテゴリ変更を通知するChrome拡張機能",
   "permissions": [
     "alarms",
@@ -11,7 +11,8 @@
   ],
   "host_permissions": [
     "https://*.chzzk.naver.com/*",
-    "https://*.naver.com/*"
+    "https://*.naver.com/*",
+    "https://*.pstatic.net/*"
   ],
   "background": {
     "service_worker": "background.js",
