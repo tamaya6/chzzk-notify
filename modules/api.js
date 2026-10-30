@@ -46,7 +46,10 @@ export async function fetchFollowingLives() {
     }
 
     const data = await res.json();
-    const list = data?.content?.followingList || [];
+    const list = data?.content?.followingList ||
+                 data?.content?.followings ||
+                 data?.content?.data ||
+                 (Array.isArray(data?.content) ? data.content : []);
 
     const lives = list.map(item => {
       const channel = item.channel || {};
@@ -78,31 +81,74 @@ export async function fetchFollowingLives() {
  */
 export async function fetchAllFollowings() {
   try {
-    const res = await fetch(`${CHZZK_API_BASE}/service/v1/channels/followings?size=100`, {
-      credentials: 'include',
-      headers: { 'Accept': 'application/json' }
-    });
+    let allItems = [];
+    let page = 0;
+    let hasMore = true;
 
-    if (res.status === 401 || res.status === 403) {
-      return { authenticated: false, followings: [] };
+    // Fetch pages (up to 5 pages / 250 channels)
+    while (hasMore && page < 5) {
+      const url = `${CHZZK_API_BASE}/service/v1/channels/followings?size=50&page=${page}`;
+      const res = await fetch(url, {
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        return { authenticated: false, followings: [] };
+      }
+      if (!res.ok) {
+        // Fallback for single query without page parameter
+        if (page === 0) {
+          const fallbackRes = await fetch(`${CHZZK_API_BASE}/service/v1/channels/followings?size=100`, {
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' }
+          });
+          if (fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            console.log('[Chzzk API] Followings fallback response:', fallbackData);
+            const rawList = fallbackData?.content?.followingList ||
+                            fallbackData?.content?.followings ||
+                            fallbackData?.content?.data ||
+                            (Array.isArray(fallbackData?.content) ? fallbackData.content : []);
+            allItems.push(...rawList);
+          }
+        }
+        break;
+      }
+
+      const data = await res.json();
+      console.log(`[Chzzk API] Followings page ${page} response:`, data);
+
+      const rawList = data?.content?.followingList ||
+                      data?.content?.followings ||
+                      data?.content?.data ||
+                      (Array.isArray(data?.content) ? data.content : []);
+
+      if (!Array.isArray(rawList) || rawList.length === 0) {
+        break;
+      }
+
+      allItems.push(...rawList);
+
+      const pageInfo = data?.content?.page;
+      if (pageInfo && (pageInfo.more === true || (pageInfo.next !== null && pageInfo.next !== undefined))) {
+        page++;
+      } else {
+        hasMore = false;
+      }
     }
-    if (!res.ok) {
-      throw new Error(`API error: ${res.status}`);
-    }
 
-    const data = await res.json();
-    const list = data?.content?.data || [];
-
-    const followings = list.map(item => {
-      const ch = item.channel || {};
+    const followings = allItems.map(item => {
+      const ch = item.channel || item;
       return {
         channelId: ch.channelId || item.channelId,
-        channelName: ch.channelName || 'Unknown Streamer',
-        channelImageUrl: ch.channelImageUrl || '',
-        verifiedMark: !!ch.verifiedMark
+        channelName: ch.channelName || item.channelName || 'Unknown Streamer',
+        channelImageUrl: ch.channelImageUrl || item.channelImageUrl || '',
+        verifiedMark: !!(ch.verifiedMark ?? item.verifiedMark)
       };
-    });
+    }).filter(ch => ch.channelId);
 
+    console.log(`[Chzzk API] Successfully fetched ${followings.length} total followings.`);
     return { authenticated: true, followings };
   } catch (err) {
     console.error('Failed to fetch followings list:', err);
