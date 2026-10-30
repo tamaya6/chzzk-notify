@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Chzzk Notify",
+    "description": "Extension name"
+  },
+  "extDesc": {
+    "message": "치지직(Chzzk) 팔로우 중인 스트리머의 방송 시작, 종료 및 카테고리 변경을 실시간으로 알려주는 확장 프로그램",
+    "description": "Extension description"
+  }
+}
+

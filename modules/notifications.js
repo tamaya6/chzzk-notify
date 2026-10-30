@@ -1,5 +1,6 @@
 // Notifications and Badge management module
 import { isQuietHours } from './storage.js';
+import { t } from './i18n.js';
 
 const OFFSCREEN_PATH = 'offscreen/offscreen.html';
 
@@ -93,11 +94,13 @@ export async function notifyLiveStart(channel, settings) {
   const notifId = `live_start_${channel.channelId}_${Date.now()}`;
   notificationMap.set(notifId, { channelId: channel.channelId, type: 'live_start' });
 
+  const lang = settings.language || 'auto';
+
   // Chrome notification
   await safeCreateNotification(notifId, {
     type: 'basic',
     iconUrl: channel.channelImageUrl || DEFAULT_ICON,
-    title: `🔴 ${channel.channelName} が配信を開始しました！`,
+    title: t('notifLiveStartTitle', { channelName: channel.channelName }, lang),
     message: `${channel.liveTitle}\n[${channel.liveCategoryValue || 'Just Chatting'}]`,
     contextMessage: 'Chzzk Live Notification',
     priority: 2
@@ -119,11 +122,13 @@ export async function notifyLiveEnd(channel, settings) {
   const notifId = `live_end_${channel.channelId}_${Date.now()}`;
   notificationMap.set(notifId, { channelId: channel.channelId, type: 'live_end' });
 
+  const lang = settings.language || 'auto';
+
   await safeCreateNotification(notifId, {
     type: 'basic',
     iconUrl: channel.channelImageUrl || DEFAULT_ICON,
-    title: `⏹️ ${channel.channelName} の配信が終了しました`,
-    message: `直前のタイトル: ${channel.liveTitle || '(タイトルなし)'}`,
+    title: t('notifLiveEndTitle', { channelName: channel.channelName }, lang),
+    message: t('notifLiveEndMsg', { title: channel.liveTitle || t('noTitle', {}, lang) }, lang),
     contextMessage: 'Chzzk Live Notification',
     priority: 1
   });
@@ -139,11 +144,14 @@ export async function notifyCategoryChange(channel, oldCategory, newCategory, se
   const notifId = `category_${channel.channelId}_${Date.now()}`;
   notificationMap.set(notifId, { channelId: channel.channelId, type: 'category_change' });
 
+  const lang = settings.language || 'auto';
+  const oldCat = oldCategory || t('notifCategoryUnset', {}, lang);
+
   await safeCreateNotification(notifId, {
     type: 'basic',
     iconUrl: channel.channelImageUrl || DEFAULT_ICON,
-    title: `🎮 ${channel.channelName} がカテゴリを変更しました`,
-    message: `${oldCategory || '未分類'} ➔ ${newCategory}\n${channel.liveTitle}`,
+    title: t('notifCategoryTitle', { channelName: channel.channelName }, lang),
+    message: t('notifCategoryMsg', { oldCategory: oldCat, newCategory, title: channel.liveTitle || '' }, lang),
     contextMessage: 'Chzzk Live Notification',
     priority: 1
   });
@@ -160,11 +168,13 @@ export async function notifyTest(settings = {}) {
   const notifId = `test_notif_${Date.now()}`;
   notificationMap.set(notifId, { channelId: null, type: 'test' });
 
+  const lang = settings.language || 'auto';
+
   await safeCreateNotification(notifId, {
     type: 'basic',
     iconUrl: DEFAULT_ICON,
-    title: '🔔 テスト通知: Chzzk Notify',
-    message: '配信通知のテストです。トーストが正常に表示されています！',
+    title: t('notifTestTitle', {}, lang),
+    message: t('notifTestMsg', {}, lang),
     contextMessage: 'Chzzk Live Notification',
     priority: 2
   });

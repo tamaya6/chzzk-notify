@@ -17,15 +17,15 @@
       </div>
       <div class="header-actions">
         <div id="userProfile" class="user-profile" title="ログイン状態">
-          <span id="userNickname" class="user-nickname">未ログイン</span>
+          <span id="userNickname" class="user-nickname" data-i18n="notLoggedIn">未ログイン</span>
         </div>
-        <button id="btnRefresh" class="icon-btn" title="今すぐ更新">
+        <button id="btnRefresh" class="icon-btn" title="今すぐ更新" data-i18n-title="btnRefresh">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M23 4v6h-6M1 20v-6h6"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
         </button>
-        <button id="btnSettings" class="icon-btn" title="設定">
+        <button id="btnSettings" class="icon-btn" title="設定" data-i18n-title="btnSettings">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -41,7 +41,7 @@
           <circle cx="11" cy="11" r="8"/>
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input type="text" id="searchInput" placeholder="配信者・ゲーム・タイトルを検索..." autocomplete="off">
+        <input type="text" id="searchInput" placeholder="配信者・ゲーム・タイトルを検索..." data-i18n-placeholder="searchPlaceholder" autocomplete="off">
         <button id="btnClearSearch" class="clear-btn" style="display: none;">&times;</button>
       </div>
     </div>
@@ -51,10 +51,10 @@
       <!-- Not Logged In Banner -->
       <div id="loginBanner" class="banner-box login-banner" style="display: none;">
         <div class="banner-info">
-          <h4>Chzzkにログインしてください</h4>
-          <p>フォロー中の配信者を自動取得・通知するにはChzzkへのログインが必要です。</p>
+          <h4 data-i18n="loginBannerTitle">Chzzkにログインしてください</h4>
+          <p data-i18n="loginBannerDesc">フォロー中の配信者を自動取得・通知するにはChzzkへのログインが必要です。</p>
         </div>
-        <a href="https://chzzk.naver.com" target="_blank" class="btn-primary">Chzzkを開く</a>
+        <a href="https://chzzk.naver.com" target="_blank" class="btn-primary" data-i18n="openChzzk">Chzzkを開く</a>
       </div>
 
       <!-- Live Streamers Section -->
@@ -62,13 +62,12 @@
         <div class="section-header">
           <div class="section-title">
             <span class="live-dot"></span>
-            <span>配信中</span>
+            <span data-i18n="live">配信中</span>
             <span id="liveCountBadge" class="count-pill">0</span>
           </div>
         </div>
         <div id="liveList" class="card-list">
-          <!-- Dynamic Live Cards -->
-          <div class="empty-state">読み込み中...</div>
+          <div class="empty-state" data-i18n="loading">読み込み中...</div>
         </div>
       </section>
 
@@ -77,7 +76,7 @@
         <div class="section-header collapsible" id="toggleOfflineSection">
           <div class="section-title">
             <span class="offline-dot"></span>
-            <span>オフライン</span>
+            <span data-i18n="offline">オフライン</span>
             <span id="offlineCountBadge" class="count-pill">0</span>
           </div>
           <svg id="offlineChevron" class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -94,60 +93,70 @@
     <div id="settingsModal" class="modal-backdrop" style="display: none;">
       <div class="modal-box">
         <div class="modal-header">
-          <h3>設定</h3>
+          <h3 data-i18n="settingsTitle">設定</h3>
           <button id="btnCloseSettings" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
           <div class="setting-group">
-            <label class="setting-title">更新間隔</label>
+            <label class="setting-title" data-i18n="settingLanguage">表示言語</label>
+            <select id="settingLanguage" class="custom-select">
+              <option value="auto" data-i18n="langAuto">自動 (ブラウザ設定)</option>
+              <option value="ja" data-i18n="langJa">日本語</option>
+              <option value="ko" data-i18n="langKo">한국어</option>
+              <option value="en" data-i18n="langEn">English</option>
+            </select>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-title" data-i18n="settingPollingInterval">更新間隔</label>
             <select id="settingPollingInterval" class="custom-select">
-              <option value="1">1分 (最速)</option>
-              <option value="2" selected>2分 (推奨)</option>
-              <option value="3">3分</option>
-              <option value="5">5分</option>
+              <option value="1" data-i18n="interval1m">1分 (最速)</option>
+              <option value="2" selected data-i18n="interval2m">2分 (推奨)</option>
+              <option value="3" data-i18n="interval3m">3分</option>
+              <option value="5" data-i18n="interval5m">5分</option>
             </select>
           </div>
 
           <div class="setting-group">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label class="setting-title" style="margin-bottom: 0;">通知イベント</label>
-              <button id="btnTestNotification" class="btn-secondary" type="button" style="padding: 3px 8px; font-size: 11px;">テスト通知を表示</button>
+              <label class="setting-title" style="margin-bottom: 0;" data-i18n="settingEventsTitle">通知イベント</label>
+              <button id="btnTestNotification" class="btn-secondary" type="button" style="padding: 3px 8px; font-size: 11px;" data-i18n="btnTestNotification">テスト通知を表示</button>
             </div>
             <label class="checkbox-label">
               <input type="checkbox" id="settingNotifyLiveStart" checked>
-              <span>配信開始通知</span>
+              <span data-i18n="settingNotifyLiveStart">配信開始通知</span>
             </label>
             <label class="checkbox-label">
               <input type="checkbox" id="settingNotifyLiveEnd" checked>
-              <span>配信終了通知</span>
+              <span data-i18n="settingNotifyLiveEnd">配信終了通知</span>
             </label>
             <label class="checkbox-label">
               <input type="checkbox" id="settingNotifyCategoryChange" checked>
-              <span>カテゴリ（ゲーム）変更通知</span>
+              <span data-i18n="settingNotifyCategoryChange">カテゴリ（ゲーム）変更通知</span>
             </label>
             <label class="checkbox-label">
               <input type="checkbox" id="settingOpenInPip">
-              <span>通知クリック時にPiP（ミニプレイヤー）で開く</span>
+              <span data-i18n="settingOpenInPip">通知クリック時にPiP（ミニプレイヤー）で開く</span>
             </label>
           </div>
 
           <div class="setting-group">
-            <label class="setting-title">サウンド設定</label>
+            <label class="setting-title" data-i18n="settingSoundTitle">サウンド設定</label>
             <label class="checkbox-label">
               <input type="checkbox" id="settingSoundEnabled" checked>
-              <span>通知音を鳴らす</span>
+              <span data-i18n="settingSoundEnabled">通知音を鳴らす</span>
             </label>
             <div class="sound-controls" id="soundControlsArea">
               <div class="sound-select-row">
                 <select id="settingSelectedSound" class="custom-select">
-                  <option value="chime">チャイム (標準)</option>
-                  <option value="pop">ポップ音</option>
-                  <option value="bell">ベル音</option>
+                  <option value="chime" data-i18n="soundChime">チャイム (標準)</option>
+                  <option value="pop" data-i18n="soundPop">ポップ音</option>
+                  <option value="bell" data-i18n="soundBell">ベル音</option>
                 </select>
-                <button id="btnTestSound" class="btn-secondary" type="button">試聴</button>
+                <button id="btnTestSound" class="btn-secondary" type="button" data-i18n="btnTestSound">試聴</button>
               </div>
               <div class="volume-slider-row">
-                <span>音量</span>
+                <span data-i18n="settingVolume">音量</span>
                 <input type="range" id="settingSoundVolume" min="0.1" max="1.0" step="0.05" value="0.6">
                 <span id="volumeValueLabel">60%</span>
               </div>
@@ -155,10 +164,10 @@
           </div>
 
           <div class="setting-group">
-            <label class="setting-title">おやすみモード (Do Not Disturb)</label>
+            <label class="setting-title" data-i18n="settingQuietHoursTitle">おやすみモード (Do Not Disturb)</label>
             <label class="checkbox-label">
               <input type="checkbox" id="settingQuietHours">
-              <span>指定時間帯の通知と音をミュート</span>
+              <span data-i18n="settingQuietHoursEnabled">指定時間帯の通知と音をミュート</span>
             </label>
             <div class="time-range-row" id="quietHoursTimeArea">
               <input type="time" id="settingQuietHoursStart" value="00:00" class="time-input">
@@ -168,7 +177,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button id="btnSaveSettings" class="btn-primary" style="width: 100%;">設定を保存</button>
+          <button id="btnSaveSettings" class="btn-primary" style="width: 100%;" data-i18n="btnSaveSettings">設定を保存</button>
         </div>
       </div>
     </div>

@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Chzzk Notify",
+    "description": "Extension name"
+  },
+  "extDesc": {
+    "message": "Monitor followed Chzzk streamers and get real-time notifications for live start, end, and category changes.",
+    "description": "Extension description"
+  }
+}
+

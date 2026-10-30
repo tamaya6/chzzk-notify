@@ -1,10 +1,12 @@
 // Popup UI logic
 import { getSettings, saveSettings, getCachedChannels, updateChannelNotifySetting } from '../modules/storage.js';
 import { playTone } from '../modules/audio.js';
+import { t } from '../modules/i18n.js';
 
 let allChannels = [];
 let userSettings = {};
 let isOfflineOpen = false;
+let currentUserInfo = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
@@ -12,6 +14,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Request fresh sync from background
   triggerSync();
 });
+
+function getLang() {
+  return userSettings.language || 'auto';
+}
+
+/**
+ * Safely validate and sanitize URL schemes
+ */
+function safeUrl(url, fallback = '../icons/icon128.png') {
+  if (!url || typeof url !== 'string') return fallback;
+  if (/^https?:\/\//i.test(url) || url.startsWith('../') || url.startsWith('chrome-extension://')) {
+    return url;
+  }
+  return fallback;
+}
+
+function applyI18n() {
+  const lang = getLang();
+
+  // Translate text content
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (key) {
+      el.textContent = t(key, {}, lang);
+    }
+  });
+
+  // Translate titles / tooltips
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.getAttribute('data-i18n-title');
+    if (key) {
+      el.title = t(key, {}, lang);
+    }
+  });
+
+  // Translate placeholders
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (key) {
+      el.placeholder = t(key, {}, lang);
+    }
+  });
+}
 
 function setupEventListeners() {
   // Refresh button
@@ -80,9 +125,12 @@ function setupEventListeners() {
 
 async function loadInitialData() {
   userSettings = await getSettings();
+  applyI18n();
+
   const cache = await getCachedChannels();
   allChannels = cache.channels || [];
-  updateUserStatusUI(cache.userInfo);
+  currentUserInfo = cache.userInfo;
+  updateUserStatusUI(currentUserInfo);
   renderChannels();
 }
 
@@ -91,11 +139,12 @@ async function triggerSync() {
     const res = await chrome.runtime.sendMessage({ type: 'SYNC_NOW' });
     if (res && res.channels) {
       allChannels = res.channels;
-      updateUserStatusUI(res.userInfo);
+      currentUserInfo = res.userInfo;
+      updateUserStatusUI(currentUserInfo);
       renderChannels();
     } else if (res && res.error === 'NOT_LOGGED_IN') {
-      document.getElementById('loginBanner').style.display = 'flex';
-      document.getElementById('userNickname').textContent = '未ログイン';
+      currentUserInfo = { loggedIn: false };
+      updateUserStatusUI(currentUserInfo);
     }
   } catch (err) {
     console.warn('Sync request failed:', err);
@@ -105,18 +154,21 @@ async function triggerSync() {
 function updateUserStatusUI(userInfo) {
   const loginBanner = document.getElementById('loginBanner');
   const userNick = document.getElementById('userNickname');
+  const lang = getLang();
 
   if (userInfo && userInfo.loggedIn) {
     loginBanner.style.display = 'none';
-    userNick.textContent = userInfo.nickname || 'ログイン中';
-    userNick.title = `Chzzkアカウント: ${userInfo.nickname}`;
+    userNick.textContent = userInfo.nickname || 'Online';
+    userNick.title = t('loggedInAs', { name: userInfo.nickname }, lang);
   } else {
     loginBanner.style.display = 'flex';
-    userNick.textContent = '未ログイン';
+    userNick.textContent = t('notLoggedIn', {}, lang);
+    userNick.title = t('notLoggedIn', {}, lang);
   }
 }
 
 function renderChannels() {
+  const lang = getLang();
   const query = document.getElementById('searchInput').value.trim().toLowerCase();
 
   const filtered = allChannels.filter(ch => {
@@ -136,103 +188,173 @@ function renderChannels() {
 
   // Render Live Cards
   const liveContainer = document.getElementById('liveList');
+  liveContainer.innerHTML = '';
   if (liveList.length === 0) {
-    liveContainer.innerHTML = `<div class="empty-state">${query ? '該当する配信がありません' : '現在配信中のフォローチャンネルはありません'}</div>`;
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'empty-state';
+    emptyDiv.textContent = query ? t('noLiveMatching', {}, lang) : t('noLiveCurrent', {}, lang);
+    liveContainer.appendChild(emptyDiv);
   } else {
-    liveContainer.innerHTML = '';
     liveList.forEach(ch => {
-      liveContainer.appendChild(createLiveCard(ch));
+      liveContainer.appendChild(createLiveCard(ch, lang));
     });
   }
 
   // Render Offline List
   const offlineContainer = document.getElementById('offlineList');
+  offlineContainer.innerHTML = '';
   if (offlineList.length === 0) {
-    offlineContainer.innerHTML = `<div class="empty-state">${query ? '該当するチャンネルがありません' : 'オフラインのチャンネルはありません'}</div>`;
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'empty-state';
+    emptyDiv.textContent = query ? t('noOfflineMatching', {}, lang) : t('noOfflineCurrent', {}, lang);
+    offlineContainer.appendChild(emptyDiv);
   } else {
-    offlineContainer.innerHTML = '';
     offlineList.forEach(ch => {
-      offlineContainer.appendChild(createOfflineRow(ch));
+      offlineContainer.appendChild(createOfflineRow(ch, lang));
     });
   }
 }
 
-function createLiveCard(ch) {
+function createLiveCard(ch, lang) {
   const card = document.createElement('div');
   card.className = 'live-card';
 
-  // Format viewer count
+  // Format viewer count & uptime
   const viewers = (ch.concurrentUserCount || 0).toLocaleString();
-  const uptime = calcUptime(ch.openDate);
+  const uptime = calcUptime(ch.openDate, lang);
 
   let thumbUrl = ch.liveImageUrl || '';
   if (thumbUrl && typeof thumbUrl === 'string') {
     thumbUrl = thumbUrl.replace(/\{type\}|%7Btype%7D/g, '720');
   }
-  if (!thumbUrl) {
-    thumbUrl = ch.channelImageUrl || '../icons/icon128.png';
-  }
-  const avatarUrl = ch.channelImageUrl || '../icons/icon48.png';
+  const resolvedThumb = safeUrl(thumbUrl || ch.channelImageUrl, '../icons/icon128.png');
+  const resolvedAvatar = safeUrl(ch.channelImageUrl, '../icons/icon48.png');
 
-  card.innerHTML = `
-    <div class="card-thumb-container" data-action="open-tab" title="配信ページを開く">
-      <img src="${escapeHtml(thumbUrl)}" alt="" class="card-thumb-img">
-      <div class="badge-live-tag">LIVE</div>
-      <div class="badge-viewers">👥 ${viewers}</div>
-      ${uptime ? `<div class="badge-uptime">⏱️ ${uptime}</div>` : ''}
-    </div>
-    <div class="card-content">
-      <img src="${escapeHtml(avatarUrl)}" alt="" class="streamer-avatar">
-      <div class="card-info">
-        <div class="stream-title" data-action="open-tab" title="${escapeHtml(ch.liveTitle || '')}">
-          ${escapeHtml(ch.liveTitle || '(タイトルなし)')}
-        </div>
-        <div class="stream-sub">
-          <span class="streamer-name">${escapeHtml(ch.channelName)}</span>
-          ${ch.liveCategoryValue ? `<span class="category-tag">${escapeHtml(ch.liveCategoryValue)}</span>` : ''}
-        </div>
-        <div class="card-actions">
-          <button class="bell-btn ${ch.notifyEnabled ? 'active' : ''}" data-action="toggle-notify" title="${ch.notifyEnabled ? '通知ON (クリックでOFF)' : '通知OFF (クリックでON)'}">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="${ch.notifyEnabled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
-          </button>
-          <button class="action-pill-btn pip-btn" data-action="open-pip" title="PiPミニプレイヤーで開く">
-            🗔 PiP
-          </button>
-          <button class="action-pill-btn" data-action="open-tab" title="通常タブで開く">
-            📺 視聴
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
+  const titleFallback = ch.liveTitle || t('noTitle', {}, lang);
+  const openStreamTitle = t('openStreamPage', {}, lang);
+  const pipBtnTitle = t('pipTitle', {}, lang);
+  const tabBtnTitle = t('tabTitle', {}, lang);
+  const notifyTitle = ch.notifyEnabled ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
+  const watchLabel = t('watch', {}, lang);
+  const pipLabel = t('pip', {}, lang);
 
-  // Attach safe image fallback handlers (CSP compliant)
-  const thumbImg = card.querySelector('.card-thumb-img');
-  thumbImg?.addEventListener('error', () => {
+  // 1. Thumbnail Container
+  const thumbContainer = document.createElement('div');
+  thumbContainer.className = 'card-thumb-container';
+  thumbContainer.dataset.action = 'open-tab';
+  thumbContainer.title = openStreamTitle;
+
+  const thumbImg = document.createElement('img');
+  thumbImg.className = 'card-thumb-img';
+  thumbImg.alt = '';
+  thumbImg.src = resolvedThumb;
+  thumbImg.addEventListener('error', () => {
     if (ch.channelImageUrl && thumbImg.src !== ch.channelImageUrl) {
-      thumbImg.src = ch.channelImageUrl;
+      thumbImg.src = safeUrl(ch.channelImageUrl, '../icons/icon128.png');
     } else {
       thumbImg.src = '../icons/icon128.png';
     }
   });
-  const avatarImg = card.querySelector('.streamer-avatar');
-  avatarImg?.addEventListener('error', () => { avatarImg.src = '../icons/icon48.png'; });
 
-  // Attach card event listeners
-  card.querySelectorAll('[data-action="open-tab"]').forEach(el => {
-    el.addEventListener('click', () => {
-      chrome.runtime.sendMessage({
-        type: 'OPEN_STREAM',
-        channelId: ch.channelId,
-        asPip: false
-      });
-    });
+  const badgeLive = document.createElement('div');
+  badgeLive.className = 'badge-live-tag';
+  badgeLive.textContent = 'LIVE';
+
+  const badgeViewers = document.createElement('div');
+  badgeViewers.className = 'badge-viewers';
+  badgeViewers.textContent = `👥 ${viewers}`;
+
+  thumbContainer.appendChild(thumbImg);
+  thumbContainer.appendChild(badgeLive);
+  thumbContainer.appendChild(badgeViewers);
+
+  if (uptime) {
+    const badgeUptime = document.createElement('div');
+    badgeUptime.className = 'badge-uptime';
+    badgeUptime.textContent = `⏱️ ${uptime}`;
+    thumbContainer.appendChild(badgeUptime);
+  }
+
+  // 2. Card Content
+  const cardContent = document.createElement('div');
+  cardContent.className = 'card-content';
+
+  const avatarImg = document.createElement('img');
+  avatarImg.className = 'streamer-avatar';
+  avatarImg.alt = '';
+  avatarImg.src = resolvedAvatar;
+  avatarImg.addEventListener('error', () => {
+    avatarImg.src = '../icons/icon48.png';
   });
 
-  card.querySelector('[data-action="open-pip"]')?.addEventListener('click', () => {
+  const cardInfo = document.createElement('div');
+  cardInfo.className = 'card-info';
+
+  const streamTitle = document.createElement('div');
+  streamTitle.className = 'stream-title';
+  streamTitle.dataset.action = 'open-tab';
+  streamTitle.title = titleFallback;
+  streamTitle.textContent = titleFallback;
+
+  const streamSub = document.createElement('div');
+  streamSub.className = 'stream-sub';
+
+  const streamerName = document.createElement('span');
+  streamerName.className = 'streamer-name';
+  streamerName.textContent = ch.channelName || '';
+  streamSub.appendChild(streamerName);
+
+  if (ch.liveCategoryValue) {
+    const categoryTag = document.createElement('span');
+    categoryTag.className = 'category-tag';
+    categoryTag.textContent = ch.liveCategoryValue;
+    streamSub.appendChild(categoryTag);
+  }
+
+  // Action buttons
+  const cardActions = document.createElement('div');
+  cardActions.className = 'card-actions';
+
+  // Bell toggle button
+  const bellBtn = document.createElement('button');
+  bellBtn.className = `bell-btn ${ch.notifyEnabled ? 'active' : ''}`;
+  bellBtn.dataset.action = 'toggle-notify';
+  bellBtn.title = notifyTitle;
+
+  const bellSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  bellSvg.setAttribute('viewBox', '0 0 24 24');
+  bellSvg.setAttribute('width', '14');
+  bellSvg.setAttribute('height', '14');
+  bellSvg.setAttribute('fill', ch.notifyEnabled ? 'currentColor' : 'none');
+  bellSvg.setAttribute('stroke', 'currentColor');
+  bellSvg.setAttribute('stroke-width', '2');
+
+  const bellPath1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bellPath1.setAttribute('d', 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9');
+  const bellPath2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bellPath2.setAttribute('d', 'M13.73 21a2 2 0 0 1-3.46 0');
+  bellSvg.appendChild(bellPath1);
+  bellSvg.appendChild(bellPath2);
+  bellBtn.appendChild(bellSvg);
+
+  bellBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const newState = !ch.notifyEnabled;
+    ch.notifyEnabled = newState;
+    await updateChannelNotifySetting(ch.channelId, newState);
+    bellBtn.classList.toggle('active', newState);
+    bellSvg.setAttribute('fill', newState ? 'currentColor' : 'none');
+    bellBtn.title = newState ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
+  });
+
+  // PiP button
+  const pipBtn = document.createElement('button');
+  pipBtn.className = 'action-pill-btn pip-btn';
+  pipBtn.dataset.action = 'open-pip';
+  pipBtn.title = pipBtnTitle;
+  pipBtn.textContent = pipLabel;
+  pipBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     chrome.runtime.sendMessage({
       type: 'OPEN_STREAM',
       channelId: ch.channelId,
@@ -240,61 +362,125 @@ function createLiveCard(ch) {
     });
   });
 
-  card.querySelector('[data-action="toggle-notify"]')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    const newState = !ch.notifyEnabled;
-    ch.notifyEnabled = newState;
-    await updateChannelNotifySetting(ch.channelId, newState);
-    btn.classList.toggle('active', newState);
-    btn.querySelector('svg').setAttribute('fill', newState ? 'currentColor' : 'none');
-    btn.title = newState ? '通知ON (クリックでOFF)' : '通知OFF (クリックでON)';
+  // Watch in tab button
+  const watchBtn = document.createElement('button');
+  watchBtn.className = 'action-pill-btn';
+  watchBtn.dataset.action = 'open-tab';
+  watchBtn.title = tabBtnTitle;
+  watchBtn.textContent = watchLabel;
+  watchBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    chrome.runtime.sendMessage({
+      type: 'OPEN_STREAM',
+      channelId: ch.channelId,
+      asPip: false
+    });
+  });
+
+  cardActions.appendChild(bellBtn);
+  cardActions.appendChild(pipBtn);
+  cardActions.appendChild(watchBtn);
+
+  cardInfo.appendChild(streamTitle);
+  cardInfo.appendChild(streamSub);
+  cardInfo.appendChild(cardActions);
+
+  cardContent.appendChild(avatarImg);
+  cardContent.appendChild(cardInfo);
+
+  card.appendChild(thumbContainer);
+  card.appendChild(cardContent);
+
+  // Card-level open tab clicks
+  thumbContainer.addEventListener('click', () => {
+    chrome.runtime.sendMessage({
+      type: 'OPEN_STREAM',
+      channelId: ch.channelId,
+      asPip: false
+    });
+  });
+
+  streamTitle.addEventListener('click', () => {
+    chrome.runtime.sendMessage({
+      type: 'OPEN_STREAM',
+      channelId: ch.channelId,
+      asPip: false
+    });
   });
 
   return card;
 }
 
-function createOfflineRow(ch) {
+function createOfflineRow(ch, lang) {
   const row = document.createElement('div');
   row.className = 'offline-row';
 
-  const avatarUrl = ch.channelImageUrl || '../icons/icon48.png';
+  const resolvedAvatar = safeUrl(ch.channelImageUrl, '../icons/icon48.png');
+  const openChannelTitle = t('openChannelPage', {}, lang);
+  const notifyTitle = ch.notifyEnabled ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
 
-  row.innerHTML = `
-    <div class="offline-left" title="チャンネルページを開く">
-      <img src="${escapeHtml(avatarUrl)}" alt="" class="offline-avatar">
-      <span class="offline-name">${escapeHtml(ch.channelName)}</span>
-    </div>
-    <button class="bell-btn ${ch.notifyEnabled ? 'active' : ''}" data-action="toggle-notify" title="${ch.notifyEnabled ? '通知ON (クリックでOFF)' : '通知OFF (クリックでON)'}">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="${ch.notifyEnabled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-      </svg>
-    </button>
-  `;
+  const leftDiv = document.createElement('div');
+  leftDiv.className = 'offline-left';
+  leftDiv.title = openChannelTitle;
 
-  const offlineAvatar = row.querySelector('.offline-avatar');
-  offlineAvatar?.addEventListener('error', () => { offlineAvatar.src = '../icons/icon48.png'; });
+  const avatarImg = document.createElement('img');
+  avatarImg.className = 'offline-avatar';
+  avatarImg.alt = '';
+  avatarImg.src = resolvedAvatar;
+  avatarImg.addEventListener('error', () => { avatarImg.src = '../icons/icon48.png'; });
 
-  row.querySelector('.offline-left').addEventListener('click', () => {
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'offline-name';
+  nameSpan.textContent = ch.channelName || '';
+
+  leftDiv.appendChild(avatarImg);
+  leftDiv.appendChild(nameSpan);
+
+  leftDiv.addEventListener('click', () => {
     if (ch.channelId) {
       chrome.tabs.create({ url: `https://chzzk.naver.com/${encodeURIComponent(ch.channelId)}` });
     }
   });
 
-  row.querySelector('[data-action="toggle-notify"]')?.addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
+  // Bell toggle button
+  const bellBtn = document.createElement('button');
+  bellBtn.className = `bell-btn ${ch.notifyEnabled ? 'active' : ''}`;
+  bellBtn.dataset.action = 'toggle-notify';
+  bellBtn.title = notifyTitle;
+
+  const bellSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  bellSvg.setAttribute('viewBox', '0 0 24 24');
+  bellSvg.setAttribute('width', '13');
+  bellSvg.setAttribute('height', '13');
+  bellSvg.setAttribute('fill', ch.notifyEnabled ? 'currentColor' : 'none');
+  bellSvg.setAttribute('stroke', 'currentColor');
+  bellSvg.setAttribute('stroke-width', '2');
+
+  const bellPath1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bellPath1.setAttribute('d', 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9');
+  const bellPath2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bellPath2.setAttribute('d', 'M13.73 21a2 2 0 0 1-3.46 0');
+  bellSvg.appendChild(bellPath1);
+  bellSvg.appendChild(bellPath2);
+  bellBtn.appendChild(bellSvg);
+
+  bellBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
     const newState = !ch.notifyEnabled;
     ch.notifyEnabled = newState;
     await updateChannelNotifySetting(ch.channelId, newState);
-    btn.classList.toggle('active', newState);
-    btn.querySelector('svg').setAttribute('fill', newState ? 'currentColor' : 'none');
-    btn.title = newState ? '通知ON (クリックでOFF)' : '通知OFF (クリックでON)';
+    bellBtn.classList.toggle('active', newState);
+    bellSvg.setAttribute('fill', newState ? 'currentColor' : 'none');
+    bellBtn.title = newState ? t('notifyOn', {}, lang) : t('notifyOff', {}, lang);
   });
+
+  row.appendChild(leftDiv);
+  row.appendChild(bellBtn);
 
   return row;
 }
 
-function calcUptime(openDateStr) {
+function calcUptime(openDateStr, lang) {
   if (!openDateStr) return '';
   try {
     const start = new Date(openDateStr.replace(/-/g, '/')).getTime();
@@ -304,27 +490,18 @@ function calcUptime(openDateStr) {
     const hrs = Math.floor(diffMins / 60);
     const mins = diffMins % 60;
     if (hrs > 0) {
-      return `${hrs}時間${mins}分`;
+      return t('uptimeHoursMins', { hrs, mins }, lang);
     }
-    return `${mins}分`;
+    return t('uptimeMins', { mins }, lang);
   } catch {
     return '';
   }
 }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 async function openSettingsModal() {
   userSettings = await getSettings();
 
+  document.getElementById('settingLanguage').value = userSettings.language || 'auto';
   document.getElementById('settingPollingInterval').value = userSettings.pollingIntervalMinutes;
   document.getElementById('settingNotifyLiveStart').checked = userSettings.notifyOnLiveStart;
   document.getElementById('settingNotifyLiveEnd').checked = userSettings.notifyOnLiveEnd;
@@ -345,6 +522,7 @@ async function openSettingsModal() {
 
 async function saveSettingsFromModal() {
   const newSettings = {
+    language: document.getElementById('settingLanguage').value,
     pollingIntervalMinutes: Number(document.getElementById('settingPollingInterval').value),
     notifyOnLiveStart: document.getElementById('settingNotifyLiveStart').checked,
     notifyOnLiveEnd: document.getElementById('settingNotifyLiveEnd').checked,
@@ -361,6 +539,11 @@ async function saveSettingsFromModal() {
   };
 
   userSettings = await saveSettings(newSettings);
+
+  // Apply new language to popup UI immediately
+  applyI18n();
+  updateUserStatusUI(currentUserInfo);
+  renderChannels();
 
   // Notify background to update alarm interval
   chrome.runtime.sendMessage({

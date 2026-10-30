@@ -1,6 +1,7 @@
 // Storage management module
 
 export const DEFAULT_SETTINGS = {
+  language: 'auto', // 'auto', 'ja', 'ko', 'en'
   pollingIntervalMinutes: 2,
   notifyOnLiveStart: true,
   notifyOnLiveEnd: true,
