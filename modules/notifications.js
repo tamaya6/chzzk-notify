@@ -31,6 +31,8 @@ async function hasOffscreenDocument() {
 export async function playNotificationAudio(soundType = 'chime', volume = 0.6) {
   try {
     await ensureOffscreenDocument();
+    // Allow offscreen script to initialize listeners if document was just created
+    await new Promise(resolve => setTimeout(resolve, 80));
     chrome.runtime.sendMessage({
       type: 'PLAY_SOUND',
       soundType,

@@ -1,5 +1,6 @@
 // Popup UI logic
 import { getSettings, saveSettings, getCachedChannels, updateChannelNotifySetting } from '../modules/storage.js';
+import { playTone } from '../modules/audio.js';
 
 let allChannels = [];
 let userSettings = {};
@@ -355,9 +356,5 @@ async function saveSettingsFromModal() {
 function testSound() {
   const soundType = document.getElementById('settingSelectedSound').value;
   const volume = Number(document.getElementById('settingSoundVolume').value);
-  chrome.runtime.sendMessage({
-    type: 'PLAY_SOUND',
-    soundType,
-    volume
-  });
+  playTone(soundType, volume);
 }
