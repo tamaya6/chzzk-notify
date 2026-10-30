@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chzzk Notify</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <img src="../icons/icon32.png" alt="Chzzk" class="brand-icon">
+        <span class="brand-name">CHZZK</span>
+        <span class="brand-badge">NOTIFY</span>
+      </div>
+      <div class="header-actions">
+        <div id="userProfile" class="user-profile" title="ログイン状態">
+          <span id="userNickname" class="user-nickname">未ログイン</span>
+        </div>
+        <button id="btnRefresh" class="icon-btn" title="今すぐ更新">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+        <button id="btnSettings" class="icon-btn" title="設定">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Search Bar -->
+    <div class="search-section">
+      <div class="search-input-wrapper">
+        <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="searchInput" placeholder="配信者・ゲーム・タイトルを検索..." autocomplete="off">
+        <button id="btnClearSearch" class="clear-btn" style="display: none;">&times;</button>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="content-area">
+      <!-- Not Logged In Banner -->
+      <div id="loginBanner" class="banner-box login-banner" style="display: none;">
+        <div class="banner-info">
+          <h4>Chzzkにログインしてください</h4>
+          <p>フォロー中の配信者を自動取得・通知するにはChzzkへのログインが必要です。</p>
+        </div>
+        <a href="https://chzzk.naver.com" target="_blank" class="btn-primary">Chzzkを開く</a>
+      </div>
+
+      <!-- Live Streamers Section -->
+      <section class="section-container">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="live-dot"></span>
+            <span>配信中</span>
+            <span id="liveCountBadge" class="count-pill">0</span>
+          </div>
+        </div>
+        <div id="liveList" class="card-list">
+          <!-- Dynamic Live Cards -->
+          <div class="empty-state">読み込み中...</div>
+        </div>
+      </section>
+
+      <!-- Offline Streamers Section -->
+      <section class="section-container">
+        <div class="section-header collapsible" id="toggleOfflineSection">
+          <div class="section-title">
+            <span class="offline-dot"></span>
+            <span>オフライン</span>
+            <span id="offlineCountBadge" class="count-pill">0</span>
+          </div>
+          <svg id="offlineChevron" class="chevron-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+        <div id="offlineList" class="offline-list" style="display: none;">
+          <!-- Dynamic Offline Rows -->
+        </div>
+      </section>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>設定</h3>
+          <button id="btnCloseSettings" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-group">
+            <label class="setting-title">更新間隔</label>
+            <select id="settingPollingInterval" class="custom-select">
+              <option value="1">1分 (最速)</option>
+              <option value="2" selected>2分 (推奨)</option>
+              <option value="3">3分</option>
+              <option value="5">5分</option>
+            </select>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-title">通知イベント</label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="settingNotifyLiveStart" checked>
+              <span>配信開始通知</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="settingNotifyLiveEnd" checked>
+              <span>配信終了通知</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="settingNotifyCategoryChange" checked>
+              <span>カテゴリ（ゲーム）変更通知</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="settingOpenInPip">
+              <span>通知クリック時にPiP（ミニプレイヤー）で開く</span>
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-title">サウンド設定</label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="settingSoundEnabled" checked>
+              <span>通知音を鳴らす</span>
+            </label>
+            <div class="sound-controls" id="soundControlsArea">
+              <div class="sound-select-row">
+                <select id="settingSelectedSound" class="custom-select">
+                  <option value="chime">チャイム (標準)</option>
+                  <option value="pop">ポップ音</option>
+                  <option value="bell">ベル音</option>
+                </select>
+                <button id="btnTestSound" class="btn-secondary" type="button">試聴</button>
+              </div>
+              <div class="volume-slider-row">
+                <span>音量</span>
+                <input type="range" id="settingSoundVolume" min="0.1" max="1.0" step="0.05" value="0.6">
+                <span id="volumeValueLabel">60%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-title">おやすみモード (Do Not Disturb)</label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="settingQuietHours">
+              <span>指定時間帯の通知と音をミュート</span>
+            </label>
+            <div class="time-range-row" id="quietHoursTimeArea">
+              <input type="time" id="settingQuietHoursStart" value="00:00" class="time-input">
+              <span>〜</span>
+              <input type="time" id="settingQuietHoursEnd" value="08:00" class="time-input">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnSaveSettings" class="btn-primary" style="width: 100%;">設定を保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

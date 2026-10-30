@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Chzzk Notify",
+  "version": "1.0.0",
+  "description": "Chzzkのフォロー中配信者のステータスを監視し、配信開始・終了・カテゴリ変更を通知するChrome拡張機能",
+  "permissions": [
+    "alarms",
+    "storage",
+    "notifications",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://*.chzzk.naver.com/*",
+    "https://*.naver.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Chzzk Notify",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
