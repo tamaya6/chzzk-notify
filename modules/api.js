@@ -53,16 +53,21 @@ export async function fetchFollowingLives() {
 
     const lives = list.map(item => {
       const channel = item.channel || {};
-      const liveInfo = item.liveInfo || {};
+      const liveInfo = item.liveInfo || item.liveDetail || {};
+      let rawThumb = liveInfo.liveImageUrl || liveInfo.defaultThumbnailImageUrl || channel.channelImageUrl || '';
+      if (rawThumb && typeof rawThumb === 'string') {
+        rawThumb = rawThumb.replace(/\{type\}|%7Btype%7D/g, '720');
+      }
+
       return {
         channelId: channel.channelId || item.channelId,
         channelName: channel.channelName || 'Unknown Streamer',
         channelImageUrl: channel.channelImageUrl || '',
         verifiedMark: !!channel.verifiedMark,
         isLive: true,
-        liveId: liveInfo.liveId || null,
+        liveId: liveInfo.liveId || liveInfo.liveNo || null,
         liveTitle: liveInfo.liveTitle || 'Untitled Stream',
-        liveImageUrl: liveInfo.liveImageUrl || liveInfo.defaultThumbnailImageUrl || '',
+        liveImageUrl: rawThumb,
         concurrentUserCount: liveInfo.concurrentUserCount || 0,
         liveCategoryValue: liveInfo.liveCategoryValue || liveInfo.liveCategory || 'Just Chatting',
         openDate: liveInfo.openDate || ''

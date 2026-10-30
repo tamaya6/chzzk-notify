@@ -159,7 +159,13 @@ function createLiveCard(ch) {
   const viewers = (ch.concurrentUserCount || 0).toLocaleString();
   const uptime = calcUptime(ch.openDate);
 
-  const thumbUrl = ch.liveImageUrl || '../icons/icon128.png';
+  let thumbUrl = ch.liveImageUrl || '';
+  if (thumbUrl && typeof thumbUrl === 'string') {
+    thumbUrl = thumbUrl.replace(/\{type\}|%7Btype%7D/g, '720');
+  }
+  if (!thumbUrl) {
+    thumbUrl = ch.channelImageUrl || '../icons/icon128.png';
+  }
   const avatarUrl = ch.channelImageUrl || '../icons/icon48.png';
 
   card.innerHTML = `
@@ -199,7 +205,13 @@ function createLiveCard(ch) {
 
   // Attach safe image fallback handlers (CSP compliant)
   const thumbImg = card.querySelector('.card-thumb-img');
-  thumbImg?.addEventListener('error', () => { thumbImg.src = '../icons/icon128.png'; });
+  thumbImg?.addEventListener('error', () => {
+    if (ch.channelImageUrl && thumbImg.src !== ch.channelImageUrl) {
+      thumbImg.src = ch.channelImageUrl;
+    } else {
+      thumbImg.src = '../icons/icon128.png';
+    }
+  });
   const avatarImg = card.querySelector('.streamer-avatar');
   avatarImg?.addEventListener('error', () => { avatarImg.src = '../icons/icon48.png'; });
 
