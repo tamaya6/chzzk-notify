@@ -115,7 +115,7 @@ export async function notifyLiveStart(channel, settings) {
 /**
  * Trigger live ended notification
  */
-export async function notifyLiveEnd(channel, settings) {
+export async function notifyLiveEnd(channel, settings, prevTitle = '') {
   if (!settings.notifyOnLiveEnd) return;
   if (isQuietHours(settings)) return;
 
@@ -123,12 +123,13 @@ export async function notifyLiveEnd(channel, settings) {
   notificationMap.set(notifId, { channelId: channel.channelId, type: 'live_end' });
 
   const lang = settings.language || 'auto';
+  const title = channel.liveTitle || prevTitle || t('noTitle', {}, lang);
 
   await safeCreateNotification(notifId, {
     type: 'basic',
     iconUrl: channel.channelImageUrl || DEFAULT_ICON,
     title: t('notifLiveEndTitle', { channelName: channel.channelName }, lang),
-    message: t('notifLiveEndMsg', { title: channel.liveTitle || t('noTitle', {}, lang) }, lang),
+    message: t('notifLiveEndMsg', { title }, lang),
     contextMessage: 'Chzzk Live Notification',
     priority: 1
   });

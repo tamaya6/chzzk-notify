@@ -66,7 +66,7 @@ export async function fetchFollowingLives() {
         verifiedMark: !!channel.verifiedMark,
         isLive: true,
         liveId: liveInfo.liveId || liveInfo.liveNo || null,
-        liveTitle: liveInfo.liveTitle || 'Untitled Stream',
+        liveTitle: liveInfo.liveTitle || item.liveTitle || liveInfo.title || 'Untitled Stream',
         liveImageUrl: rawThumb,
         concurrentUserCount: liveInfo.concurrentUserCount || 0,
         liveCategoryValue: liveInfo.liveCategoryValue || liveInfo.liveCategory || 'Just Chatting',

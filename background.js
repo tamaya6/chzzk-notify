@@ -118,7 +118,7 @@ export async function performCheck({ isFirstRun = false } = {}) {
         category,
         channelName: ch.channelName,
         channelImageUrl: ch.channelImageUrl,
-        liveTitle: ch.liveTitle
+        liveTitle: ch.liveTitle || (prev ? prev.liveTitle : '')
       };
 
       // Skip triggering notifications on first run or empty state initialization
@@ -132,7 +132,11 @@ export async function performCheck({ isFirstRun = false } = {}) {
           // B. Live -> Offline
           else if (prev.isLive && !isLive) {
             console.log(`[Chzzk Notify] Live ended: ${ch.channelName}`);
-            await notifyLiveEnd(ch, settings);
+            const channelWithPrevTitle = {
+              ...ch,
+              liveTitle: prev.liveTitle || ''
+            };
+            await notifyLiveEnd(channelWithPrevTitle, settings, prev.liveTitle);
           }
           // C. Category change while live
           else if (prev.isLive && isLive && prev.category && category && prev.category !== category) {
