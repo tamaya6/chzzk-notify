@@ -134,3 +134,24 @@ export async function notifyCategoryChange(channel, oldCategory, newCategory, se
     playNotificationAudio('pop', settings.soundVolume * 0.8);
   }
 }
+
+/**
+ * Trigger a test notification to verify toast notifications
+ */
+export async function notifyTest(settings = {}) {
+  const notifId = `test_notif_${Date.now()}`;
+  notificationMap.set(notifId, { channelId: null, type: 'test' });
+
+  chrome.notifications.create(notifId, {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+    title: '🔔 テスト通知: Chzzk Notify',
+    message: '配信通知のテストです。トーストが正常に表示されています！',
+    contextMessage: 'Chzzk Live Notification',
+    priority: 2
+  });
+
+  if (settings.soundEnabled !== false) {
+    playNotificationAudio(settings.selectedSound || 'chime', settings.soundVolume ?? 0.6);
+  }
+}

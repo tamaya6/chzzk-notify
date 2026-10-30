@@ -56,6 +56,7 @@ function setupEventListeners() {
   const settingsModal = document.getElementById('settingsModal');
   const btnSaveSettings = document.getElementById('btnSaveSettings');
   const btnTestSound = document.getElementById('btnTestSound');
+  const btnTestNotification = document.getElementById('btnTestNotification');
 
   btnSettings.addEventListener('click', openSettingsModal);
   btnCloseSettings.addEventListener('click', () => settingsModal.style.display = 'none');
@@ -65,6 +66,11 @@ function setupEventListeners() {
 
   btnSaveSettings.addEventListener('click', saveSettingsFromModal);
   btnTestSound.addEventListener('click', testSound);
+  if (btnTestNotification) {
+    btnTestNotification.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ type: 'TEST_NOTIFICATION' });
+    });
+  }
 
   const volSlider = document.getElementById('settingSoundVolume');
   volSlider.addEventListener('input', () => {

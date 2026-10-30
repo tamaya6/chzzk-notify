@@ -14,7 +14,8 @@ import {
   notifyCategoryChange,
   updateActionBadge,
   getNotificationTarget,
-  playNotificationAudio
+  playNotificationAudio,
+  notifyTest
 } from './modules/notifications.js';
 
 const ALARM_NAME = 'CHZZK_CHECK_ALARM';
@@ -224,6 +225,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'PLAY_SOUND') {
     playNotificationAudio(message.soundType, message.volume).then(() => {
       sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  if (message.type === 'TEST_NOTIFICATION') {
+    getSettings().then(settings => {
+      notifyTest(settings).then(() => {
+        sendResponse({ success: true });
+      });
     });
     return true;
   }
