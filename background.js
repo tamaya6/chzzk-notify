@@ -6,7 +6,9 @@ import {
   getCachedChannels,
   setCachedChannels,
   getPreviousState,
-  savePreviousState
+  savePreviousState,
+  isSessionSynced,
+  markSessionSynced
 } from './modules/storage.js';
 import {
   notifyLiveStart,
@@ -19,6 +21,7 @@ import {
 } from './modules/notifications.js';
 
 const ALARM_NAME = 'CHZZK_CHECK_ALARM';
+let inFlightCheck = null;
 
 // Initialize extension on install or update
 chrome.runtime.onInstalled.addListener(async () => {
@@ -26,6 +29,14 @@ chrome.runtime.onInstalled.addListener(async () => {
   const settings = await getSettings();
   setupAlarm(settings.pollingIntervalMinutes);
   // Perform initial sync (without blasting notifications)
+  await performCheck({ isFirstRun: true });
+});
+
+// Silent sync on Chrome browser startup
+chrome.runtime.onStartup.addListener(async () => {
+  console.log('[Chzzk Notify] Browser started. Performing silent sync.');
+  const settings = await getSettings();
+  setupAlarm(settings.pollingIntervalMinutes);
   await performCheck({ isFirstRun: true });
 });
 
@@ -47,12 +58,22 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 /**
- * Main polling & difference detection engine
+ * Main polling & difference detection engine (deduplicated for concurrent triggers)
  */
-export async function performCheck({ isFirstRun = false } = {}) {
+export function performCheck({ isFirstRun = false } = {}) {
+  if (inFlightCheck) {
+    return inFlightCheck;
+  }
+  inFlightCheck = runCheck({ isFirstRun }).finally(() => {
+    inFlightCheck = null;
+  });
+  return inFlightCheck;
+}
+
+async function runCheck({ isFirstRun = false } = {}) {
   try {
     const settings = await getSettings();
-    const { channelSettings } = await getCachedChannels();
+    const { channelSettings, lastUpdated } = await getCachedChannels();
 
     // 1. Fetch live channels & user status
     const [liveResult, userStatus, allFollowingsResult] = await Promise.all([
@@ -105,6 +126,20 @@ export async function performCheck({ isFirstRun = false } = {}) {
     const nextState = {};
 
     const isStateEmpty = Object.keys(previousState).length === 0;
+    const sessionSynced = await isSessionSynced();
+    const intervalMs = Math.max(1, settings.pollingIntervalMinutes || 2) * 60 * 1000;
+    const staleThresholdMs = Math.max(10 * 60 * 1000, intervalMs * 3);
+    const isStale = !lastUpdated || (Date.now() - lastUpdated) > staleThresholdMs;
+
+    const shouldSuppressNotifications = isFirstRun || isStateEmpty || !sessionSynced || isStale;
+    if (shouldSuppressNotifications) {
+      console.log('[Chzzk Notify] Notifications suppressed for this sync.', {
+        isFirstRun,
+        isStateEmpty,
+        sessionSynced,
+        isStale
+      });
+    }
 
     for (const ch of currentChannelList) {
       const prev = previousState[ch.channelId];
@@ -121,8 +156,8 @@ export async function performCheck({ isFirstRun = false } = {}) {
         liveTitle: ch.liveTitle || (prev ? prev.liveTitle : '')
       };
 
-      // Skip triggering notifications on first run or empty state initialization
-      if (!isFirstRun && !isStateEmpty && ch.notifyEnabled) {
+      // Skip triggering notifications on startup, stale sync, first run, or empty state
+      if (!shouldSuppressNotifications && ch.notifyEnabled) {
         if (prev) {
           // A. Offline -> Live
           if (!prev.isLive && isLive) {
@@ -153,6 +188,7 @@ export async function performCheck({ isFirstRun = false } = {}) {
     // 3. Save updated state and cache
     await savePreviousState(nextState);
     await setCachedChannels(currentChannelList, userStatus);
+    await markSessionSynced();
 
     // 4. Update badge with current live count
     updateActionBadge(lives.length);

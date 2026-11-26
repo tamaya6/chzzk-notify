@@ -65,6 +65,24 @@ export async function savePreviousState(state) {
   await chrome.storage.local.set({ previousState: state });
 }
 
+/**
+ * Check whether the extension has already completed an initial sync in this browser session.
+ * chrome.storage.session persists across MV3 Service Worker restarts but resets on Chrome restart.
+ */
+export async function isSessionSynced() {
+  if (!chrome.storage?.session) return true;
+  const result = await chrome.storage.session.get(['sessionSynced']);
+  return !!result.sessionSynced;
+}
+
+/**
+ * Mark the current browser session as synced.
+ */
+export async function markSessionSynced() {
+  if (!chrome.storage?.session) return;
+  await chrome.storage.session.set({ sessionSynced: true });
+}
+
 export function isQuietHours(settings) {
   if (!settings.quietHoursEnabled) return false;
   try {
